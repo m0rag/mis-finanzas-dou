@@ -1,4 +1,9 @@
-/* Mis Finanzas Dou */
+
+/* =====================================================
+   MIS FINANZAS DOU
+   Versión corregida con ingresos extralaborales
+   ===================================================== */
+
 "use strict";
 
 const DB_NAME = "MisFinanzasDou";
@@ -40,7 +45,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({
 }[c]));
 
 const blank = () => ({
-  income: {
+  income:{
     rate:3075,
     grat:25,
     deduct:17.45,
@@ -57,31 +62,31 @@ const blank = () => ({
 });
 
 const initial = {
-  months: {
-    "2026-11": {
-      income: {
+  months:{
+    "2026-11":{
+      income:{
         rate:3075,
         grat:25,
         deduct:17.45,
         other:0
       },
 
-      shifts: [
+      shifts:[
         {id:1,day:"Jueves",hours:6,count:4},
         {id:2,day:"Viernes",hours:6,count:4},
         {id:3,day:"Sábado",hours:7.5,count:4},
         {id:4,day:"Domingo",hours:7.5,count:5}
       ],
 
-      tips: [
+      tips:[
         {id:1793941139873,amount:1000,date:"2026-11-01"},
         {id:1793941145731,amount:8100,date:"2026-11-05"},
         {id:1794112732037,amount:7500,date:"2026-11-06"},
-        {id:1794112790449,amount:14700,date:"2026-11-07"},
+        {id:1794112739758,amount:14700,date:"2026-11-07"},
         {id:1794191494437,amount:5750,date:"2026-11-08"}
       ],
 
-      extras: [
+      extras:[
         {
           id:1793940776325,
           amount:15000,
@@ -98,7 +103,7 @@ const initial = {
         }
       ],
 
-      expenses: [
+      expenses:[
         {id:1793940921385,amount:4000,date:"2026-11-04",name:"Ajuste de Sueldo",category:"Deudas",type:"Pago de deuda"},
         {id:1793940948027,amount:123000,date:"2026-11-04",name:"Pago CMR",category:"Deudas",type:"Variable"},
         {id:1793940968599,amount:10000,date:"2026-11-04",name:"Raceroom F4",category:"Entretenimiento",type:"Variable"},
@@ -137,10 +142,12 @@ const days = [
 ];
 
 
-/* BASE DE DATOS */
+/* =====================================================
+   BASE DE DATOS
+   ===================================================== */
 
-function openDB() {
-  return new Promise((res,rej) => {
+function openDB(){
+  return new Promise((res,rej)=>{
     const r = indexedDB.open(DB_NAME,1);
 
     r.onupgradeneeded = () => {
@@ -152,8 +159,8 @@ function openDB() {
   });
 }
 
-function readDB() {
-  return new Promise((res,rej) => {
+function readDB(){
+  return new Promise((res,rej)=>{
     const r = db.transaction(STORE)
       .objectStore(STORE)
       .get(KEY);
@@ -163,8 +170,8 @@ function readDB() {
   });
 }
 
-function writeDB() {
-  return new Promise((res,rej) => {
+function writeDB(){
+  return new Promise((res,rej)=>{
     const t = db.transaction(STORE,"readwrite");
 
     t.objectStore(STORE).put(data,KEY);
@@ -174,74 +181,100 @@ function writeDB() {
   });
 }
 
-function save() {
+function save(){
   writeDB()
-    .then(() => {
-      $("#saveStatus").textContent =
-        "✓ Guardado en este iPhone";
+    .then(()=>{
+      const status = $("#saveStatus");
+      if(status) status.textContent = "✓ Guardado en este iPhone";
     })
-    .catch(() => {
-      $("#saveStatus").textContent =
-        "Error al guardar";
+    .catch(()=>{
+      const status = $("#saveStatus");
+      if(status) status.textContent = "Error al guardar";
     });
 }
 
 
-/* MESES Y CÁLCULOS */
+/* =====================================================
+   MESES Y CÁLCULOS
+   ===================================================== */
 
-function ensure(k) {
-  if (!data.months[k]) {
+function current(){
+  return data.months[activeMonth];
+}
+
+function ensure(k){
+  if(!data.months[k]){
     data.months[k] = blank();
   }
+
+  const m = data.months[k];
+
+  // Compatibilidad con registros anteriores
+  if(!m.income) m.income = blank().income;
+  if(!Array.isArray(m.shifts)) m.shifts = [];
+  if(!Array.isArray(m.tips)) m.tips = [];
+  if(!Array.isArray(m.extras)) m.extras = [];
+  if(!Array.isArray(m.expenses)) m.expenses = [];
+
+  if(m.income.other === undefined) m.income.other = 0;
+  if(m.saving === undefined) m.saving = 0;
+  if(m.goal === undefined) m.goal = 150000;
+  if(m.debt === undefined) m.debt = 0;
+  if(m.accumulated === undefined) m.accumulated = 0;
 }
 
-function shiftHours(m) {
-  return m.shifts.reduce((a,s) =>
-    a + (Number(s.hours)||0) *
-        (Number(s.count)||0), 0);
+function shiftHours(m){
+  return m.shifts.reduce((a,s)=>
+    a+(Number(s.hours)||0)*(Number(s.count)||0),0);
 }
 
-function shiftCount(m) {
-  return m.shifts.reduce((a,s) =>
-    a + (Number(s.count)||0), 0);
+function shiftCount(m){
+  return m.shifts.reduce((a,s)=>
+    a+(Number(s.count)||0),0);
 }
 
-function wage(m) {
+function wage(m){
   const h = shiftHours(m);
-  const base = h * (Number(m.income.rate)||0);
+  const base = h*(Number(m.income.rate)||0);
 
   return Math.round(
-    base *
-    (1 + (Number(m.income.grat)||0)/100) *
-    (1 - (Number(m.income.deduct)||0)/100)
+    base*
+    (1+(Number(m.income.grat)||0)/100)*
+    (1-(Number(m.income.deduct)||0)/100)
   );
 }
 
-function total(arr) {
-  return arr.reduce((a,x) =>
-    a + (Number(x.amount)||0), 0);
+function total(arr){
+  return arr.reduce((a,x)=>
+    a+(Number(x.amount)||0),0);
 }
 
-function totals(m) {
+function totals(m){
   const wages = wage(m);
+  const laborOther = Number(m.income.other)||0;
   const tips = total(m.tips);
   const extra = total(m.extras);
   const expenses = total(m.expenses);
 
+  const income = wages+laborOther+tips+extra;
+
   return {
     wages,
+    laborOther,
     tips,
     extra,
     expenses,
-    income:wages+tips+extra,
-    balance:wages+tips+extra-expenses-(Number(m.saving)||0)
+    income,
+    balance:income-expenses-(Number(m.saving)||0)
   };
 }
 
 
-/* COMPONENTES DE INTERFAZ */
+/* =====================================================
+   COMPONENTES DE INTERFAZ
+   ===================================================== */
 
-function card(title,body) {
+function card(title,body){
   return `
     <section class="card">
       <h2>${title}</h2>
@@ -250,7 +283,7 @@ function card(title,body) {
   `;
 }
 
-function field(label,name,value,type="text",extra="") {
+function field(label,name,value,type="text",extra=""){
   return `
     <div class="field">
       <label>${label}</label>
@@ -264,12 +297,12 @@ function field(label,name,value,type="text",extra="") {
   `;
 }
 
-function select(label,name,opts,value) {
+function select(label,name,opts,value){
   return `
     <div class="field">
       <label>${label}</label>
       <select name="${name}">
-        ${opts.map(o => `
+        ${opts.map(o=>`
           <option value="${esc(o)}"
             ${o===value?"selected":""}>
             ${esc(o)}
@@ -280,8 +313,8 @@ function select(label,name,opts,value) {
   `;
 }
 
-function list(items,kind) {
-  if (!items.length) {
+function list(items,kind){
+  if(!items.length){
     return `
       <div class="empty">
         Todavía no hay movimientos registrados.
@@ -291,13 +324,13 @@ function list(items,kind) {
 
   return `
     <div class="list">
-      ${[...items].sort((a,b) =>
+      ${[...items].sort((a,b)=>
         b.date.localeCompare(a.date)
-      ).map(x => `
+      ).map(x=>`
         <div class="item">
           <div>
             <div class="item-title">
-              ${esc(x.name || (kind==="tips"?"Propina":"Ingreso"))}
+              ${esc(x.name||(kind==="tips"?"Propina":"Ingreso"))}
             </div>
 
             <div class="item-sub">
@@ -323,10 +356,12 @@ function list(items,kind) {
 }
 
 
-/* RESUMEN */
+/* =====================================================
+   RESUMEN
+   ===================================================== */
 
-function summary() {
-  const m = data.months[activeMonth];
+function summary(){
+  const m = current();
   const t = totals(m);
 
   return card("Balance del mes",`
@@ -339,6 +374,7 @@ function summary() {
     </p>
 
     <div class="kpi-grid">
+
       <div class="kpi">
         <div class="label">Sueldo estimado</div>
         <div class="value">${money(t.wages)}</div>
@@ -351,13 +387,14 @@ function summary() {
 
       <div class="kpi">
         <div class="label">Otros ingresos</div>
-        <div class="value">${money(t.extra)}</div>
+        <div class="value">${money(t.extra+t.laborOther)}</div>
       </div>
 
       <div class="kpi">
         <div class="label">Gastos</div>
         <div class="value negative">${money(t.expenses)}</div>
       </div>
+
     </div>
 
     <hr>
@@ -383,15 +420,26 @@ function summary() {
 }
 
 
-/* INGRESOS Y JORNADAS */
+/* =====================================================
+   INGRESOS LABORALES Y EXTRALABORALES
+   ===================================================== */
 
-function income() {
-  const m = data.months[activeMonth];
+function income(){
+  const m = current();
   const t = totals(m);
+
+  const extraCats = [
+    "Ventas",
+    "Reembolsos",
+    "Trabajos extra",
+    "Comisiones",
+    "Otros"
+  ];
 
   return card("Ingresos laborales",`
 
     <form id="incomeForm">
+
       <div class="form-grid">
 
         ${field(
@@ -431,6 +479,7 @@ function income() {
       <button class="primary">
         Guardar configuración salarial
       </button>
+
     </form>
 
     <hr>
@@ -449,7 +498,7 @@ function income() {
 
     <div id="shiftList" class="list">
 
-      ${m.shifts.map(s => `
+      ${m.shifts.map(s=>`
         <div class="shift" data-shift="${s.id}">
 
           <div class="shift-head">
@@ -496,7 +545,7 @@ function income() {
           </div>
 
         </div>
-      `).join("") || `
+      `).join("")||`
         <div class="empty">
           Agrega tu primera jornada laboral.
         </div>
@@ -538,14 +587,79 @@ function income() {
       </p>
 
     </div>
+
+  `) + card("Ingresos extralaborales",`
+
+    <p class="muted small">
+      Registra aquí el dinero que recibes fuera
+      de tu sueldo habitual y de las propinas.
+    </p>
+
+    <form id="extraForm">
+
+      <div class="form-grid">
+
+        ${field(
+          "Descripción del ingreso",
+          "name",
+          "",
+          "text",
+          'required placeholder="Ej. Venta de un producto"'
+        )}
+
+        ${field(
+          "Monto ($)",
+          "amount",
+          "",
+          "number",
+          'required min="1" step="1"'
+        )}
+
+        ${select(
+          "Categoría",
+          "category",
+          extraCats,
+          "Otros"
+        )}
+
+        ${field(
+          "Fecha",
+          "date",
+          today(),
+          "date",
+          "required"
+        )}
+
+      </div>
+
+      <button class="primary">
+        ＋ Agregar ingreso extra
+      </button>
+
+    </form>
+
+    <hr>
+
+    <div class="row">
+      <strong>Total extralaboral</strong>
+
+      <strong class="positive">
+        ${money(total(m.extras))}
+      </strong>
+    </div>
+
+    ${list(m.extras,"extras")}
+
   `);
 }
 
 
-/* PROP​​INAS */
+/* =====================================================
+   PROP​​INAS
+   ===================================================== */
 
-function tips() {
-  const m = data.months[activeMonth];
+function tips(){
+  const m = current();
 
   return card("Registrar propinas",`
 
@@ -581,20 +695,24 @@ function tips() {
 
     <div class="row">
       <strong>Total de propinas</strong>
+
       <strong class="positive">
         ${money(total(m.tips))}
       </strong>
     </div>
 
     ${list(m.tips,"tips")}
+
   `);
 }
 
 
-/* GASTOS */
+/* =====================================================
+   GASTOS
+   ===================================================== */
 
-function expenses() {
-  const m = data.months[activeMonth];
+function expenses(){
+  const m = current();
 
   const cats = [
     "Alimentación",
@@ -671,18 +789,24 @@ function expenses() {
 
     <div class="row">
       <strong>Total de gastos</strong>
+
       <strong class="negative">
         ${money(total(m.expenses))}
       </strong>
     </div>
 
     ${list(m.expenses,"expenses")}
+
   `);
 }
-/* AHORROS */
 
-function savings() {
-  const m = data.months[activeMonth];
+
+/* =====================================================
+   AHORROS
+   ===================================================== */
+
+function savings(){
+  const m = current();
 
   const pct = m.goal
     ? Math.min(100,m.saving/m.goal*100)
@@ -751,35 +875,37 @@ function savings() {
       </p>
 
     </div>
+
   `);
 }
 
 
-/* ESTADÍSTICAS */
+/* =====================================================
+   ESTADÍSTICAS
+   ===================================================== */
 
-function stats() {
-  const m = data.months[activeMonth];
-
+function stats(){
+  const m = current();
   const groups = {};
 
-  m.expenses.forEach(x => {
+  m.expenses.forEach(x=>{
     groups[x.category] =
-      (groups[x.category]||0) + Number(x.amount);
+      (groups[x.category]||0)+Number(x.amount);
   });
 
   const rows = Object.entries(groups)
-    .sort((a,b) => b[1]-a[1]);
+    .sort((a,b)=>b[1]-a[1]);
 
   const max = Math.max(
     1,
-    ...rows.map(x => x[1])
+    ...rows.map(x=>x[1])
   );
 
   return card("Estadísticas de gastos",
 
     rows.length
 
-    ? rows.map(([name,value]) => `
+    ? rows.map(([name,value])=>`
       <div class="bar-row">
 
         <span class="bar-label">
@@ -806,7 +932,7 @@ function stats() {
       </div>
     `
 
-  ) + card("Resumen de actividad",`
+  )+card("Resumen de actividad",`
 
     <div class="row">
       <span class="muted">Horas trabajadas</span>
@@ -836,9 +962,11 @@ function stats() {
 }
 
 
-/* RENDERIZADO */
+/* =====================================================
+   RENDERIZADO
+   ===================================================== */
 
-function render() {
+function render(){
   const views = {
     summary,
     income,
@@ -850,18 +978,20 @@ function render() {
 
   $("#view").innerHTML = views[activeTab]();
 
-  document.querySelectorAll(".tab").forEach(b => {
+  document.querySelectorAll(".tab").forEach(b=>{
     b.classList.toggle(
       "active",
-      b.dataset.tab === activeTab
+      b.dataset.tab===activeTab
     );
   });
+
+  bindView();
 }
 
-function refreshMonths() {
+function refreshMonths(){
   const keys = Object.keys(data.months).sort();
 
-  $("#monthSelect").innerHTML = keys.map(k => `
+  $("#monthSelect").innerHTML = keys.map(k=>`
     <option
       value="${k}"
       ${k===activeMonth?"selected":""}>
@@ -870,35 +1000,49 @@ function refreshMonths() {
   `).join("");
 }
 
-function setMonth(k) {
+function setMonth(k){
   activeMonth = k;
   ensure(k);
   refreshMonths();
   render();
-  bindView();
   save();
 }
 
 
-/* REGISTRO DE MOVIMIENTOS */
+/* =====================================================
+   REGISTRO DE MOVIMIENTOS
+   ===================================================== */
 
-function addMovement(formId,collection,kind) {
-
+function addMovement(formId,collection,kind){
   const form = $(formId);
 
-  form.addEventListener("submit",e => {
+  if(!form) return;
 
+  form.addEventListener("submit",e=>{
     e.preventDefault();
 
     const fd = new FormData(form);
 
+    const amount = Number(fd.get("amount"));
+    const date = fd.get("date");
+
+    if(!Number.isFinite(amount)||amount<=0){
+      alert("Ingresa un monto válido.");
+      return;
+    }
+
+    if(!date || keyOf(date)!==activeMonth){
+      alert("La fecha del movimiento debe pertenecer al mes seleccionado.");
+      return;
+    }
+
     const obj = {
       id:uid(),
-      amount:Number(fd.get("amount")),
-      date:fd.get("date")
+      amount,
+      date
     };
 
-    if (kind==="expenses") {
+    if(kind==="expenses"){
       Object.assign(obj,{
         name:fd.get("name"),
         category:fd.get("category"),
@@ -906,7 +1050,7 @@ function addMovement(formId,collection,kind) {
       });
     }
 
-    if (kind==="extras") {
+    if(kind==="extras"){
       Object.assign(obj,{
         name:fd.get("name"),
         category:fd.get("category")
@@ -917,16 +1061,15 @@ function addMovement(formId,collection,kind) {
 
     save();
     render();
-    bindView();
-
   });
 }
 
 
-/* RESPALDOS */
+/* =====================================================
+   RESPALDOS
+   ===================================================== */
 
-function exportBackup() {
-
+function exportBackup(){
   const blob = new Blob(
     [
       JSON.stringify({
@@ -940,7 +1083,6 @@ function exportBackup() {
   );
 
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
 
   a.href = url;
@@ -950,32 +1092,28 @@ function exportBackup() {
   a.click();
   a.remove();
 
-  setTimeout(() => URL.revokeObjectURL(url),1500);
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
 
-function importBackup(file) {
-
+function importBackup(file){
   const reader = new FileReader();
 
-  reader.onload = () => {
-
-    try {
-
+  reader.onload = ()=>{
+    try{
       const parsed = JSON.parse(reader.result);
-      const incoming = parsed.data || parsed;
+      const incoming = parsed.data||parsed;
 
-      if (
-        !incoming.months ||
-        typeof incoming.months !== "object"
-      ) {
+      if(!incoming.months||typeof incoming.months!=="object"){
         throw Error("Formato no reconocido");
       }
 
-      if (!confirm(
+      if(!confirm(
         "Importar este respaldo reemplazará los datos actuales de la aplicación. ¿Continuar?"
       )) return;
 
       data = incoming;
+
+      Object.keys(data.months).forEach(ensure);
 
       const keys = Object.keys(data.months).sort();
 
@@ -986,48 +1124,40 @@ function importBackup(file) {
       save();
       refreshMonths();
       render();
-      bindView();
 
       alert("Respaldo importado correctamente.");
 
-    } catch(e) {
-
-      alert("No se pudo importar: " + e.message);
-
+    }catch(e){
+      alert("No se pudo importar: "+e.message);
     }
-
   };
 
   reader.readAsText(file);
 }
 
 
-/* EVENTOS DE CADA SECCIÓN */
+/* =====================================================
+   EVENTOS DE CADA SECCIÓN
+   ===================================================== */
 
-function bindView() {
+function bindView(){
 
-  if (activeTab==="income") {
+  if(activeTab==="income"){
 
-    $("#incomeForm").addEventListener("submit",e => {
-
+    $("#incomeForm").addEventListener("submit",e=>{
       e.preventDefault();
 
       const fd = new FormData(e.currentTarget);
 
-      ["rate","grat","deduct","other"].forEach(k => {
-        current().income[k] =
-          Number(fd.get(k)) || 0;
+      ["rate","grat","deduct","other"].forEach(k=>{
+        current().income[k] = Number(fd.get(k))||0;
       });
 
       save();
       render();
-      bindView();
-
     });
 
-
-    $("#addShift").addEventListener("click",() => {
-
+    $("#addShift").addEventListener("click",()=>{
       current().shifts.push({
         id:uid(),
         day:"Lunes",
@@ -1037,35 +1167,27 @@ function bindView() {
 
       save();
       render();
-      bindView();
-
     });
 
-
-    $("#shiftList").addEventListener("change",e => {
-
+    $("#shiftList").addEventListener("change",e=>{
       const box = e.target.closest("[data-shift]");
-
-      if (!box) return;
+      if(!box) return;
 
       const s = current().shifts.find(
-        x => String(x.id)===box.dataset.shift
+        x=>String(x.id)===box.dataset.shift
       );
 
-      if (!s) return;
+      if(!s) return;
 
-      if (e.target.name==="day") {
+      if(e.target.name==="day"){
         s.day = e.target.value;
       }
 
-      if (e.target.name==="hours") {
-        s.hours = Math.max(
-          0,
-          Number(e.target.value)||0
-        );
+      if(e.target.name==="hours"){
+        s.hours = Math.max(0,Number(e.target.value)||0);
       }
 
-      if (e.target.name==="count") {
+      if(e.target.name==="count"){
         s.count = Math.max(
           0,
           Math.floor(Number(e.target.value)||0)
@@ -1074,109 +1196,89 @@ function bindView() {
 
       save();
       render();
-      bindView();
-
     });
 
-
-    $("#shiftList").addEventListener("click",e => {
-
+    $("#shiftList").addEventListener("click",e=>{
       const id = e.target.dataset.removeShift;
-
-      if (!id) return;
+      if(!id) return;
 
       current().shifts = current().shifts.filter(
-        s => String(s.id)!==id
+        s=>String(s.id)!==id
       );
 
       save();
       render();
-      bindView();
-
     });
 
+    // Formulario recuperado de ingresos extralaborales
+    addMovement("#extraForm","extras","extras");
   }
 
-
-  if (activeTab==="tips") {
+  if(activeTab==="tips"){
     addMovement("#tipForm","tips","tips");
   }
 
-
-  if (activeTab==="expenses") {
-    addMovement(
-      "#expenseForm",
-      "expenses",
-      "expenses"
-    );
+  if(activeTab==="expenses"){
+    addMovement("#expenseForm","expenses","expenses");
   }
 
-
-  if (activeTab==="savings") {
-
-    $("#savingForm").addEventListener("submit",e => {
-
+  if(activeTab==="savings"){
+    $("#savingForm").addEventListener("submit",e=>{
       e.preventDefault();
 
       const fd = new FormData(e.currentTarget);
 
-      ["saving","goal","debt","accumulated"].forEach(k => {
-        current()[k] = Number(fd.get(k)) || 0;
+      ["saving","goal","debt","accumulated"].forEach(k=>{
+        current()[k] = Number(fd.get(k))||0;
       });
 
       save();
       render();
-      bindView();
-
     });
-
   }
 
+  // Delegación de eventos: un solo controlador por render.
+  // Evita acumular listeners al cambiar de pantalla.
+  $("#view").onclick = e=>{
+    const btn = e.target.closest("[data-delete]");
+    if(!btn) return;
 
-  $("#view").addEventListener("click",e => {
+    const kind = btn.dataset.delete;
+    const id = btn.dataset.id;
 
-    const kind = e.target.dataset.delete;
-    const id = e.target.dataset.id;
-
-    if (!kind || !id) return;
+    if(!["tips","extras","expenses"].includes(kind)) return;
 
     const m = current();
 
     m[kind] = m[kind].filter(
-      x => String(x.id)!==id
+      x=>String(x.id)!==id
     );
 
     save();
     render();
-    bindView();
-
-  });
-
+  };
 }
 
 
-/* NAVEGACIÓN */
+/* =====================================================
+   NAVEGACIÓN
+   ===================================================== */
 
-function go(tab) {
+function go(tab){
   activeTab = tab;
   render();
-  bindView();
-}
-
-function current() {
-  return data.months[activeMonth];
 }
 
 
-/* INICIO DE LA APLICACIÓN */
+/* =====================================================
+   INICIO DE LA APLICACIÓN
+   ===================================================== */
 
-async function start() {
-
+async function start(){
   db = await openDB();
-
   data = await readDB();
 
-  if (!data) {
+  if(!data){
     data = initial;
     await writeDB();
   }
@@ -1187,102 +1289,75 @@ async function start() {
     ? keyOf(today())
     : keys[keys.length-1];
 
-  if (!activeMonth) {
+  if(!activeMonth){
     activeMonth = keyOf(today());
     ensure(activeMonth);
   }
 
+  Object.keys(data.months).forEach(ensure);
+
   refreshMonths();
   render();
-  bindView();
 
-
-  document.querySelectorAll(".tab").forEach(b => {
-    b.addEventListener("click",() => go(b.dataset.tab));
+  document.querySelectorAll(".tab").forEach(b=>{
+    b.addEventListener("click",()=>go(b.dataset.tab));
   });
 
-
-  $("#monthSelect").addEventListener("change",e => {
+  $("#monthSelect").addEventListener("change",e=>{
     setMonth(e.target.value);
   });
 
-
-  $("#prevMonth").addEventListener("click",() => {
-
+  $("#prevMonth").addEventListener("click",()=>{
     const [y,m] = activeMonth.split("-").map(Number);
     const d = new Date(y,m-2,1);
 
     setMonth(
       `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
     );
-
   });
 
-
-  $("#nextMonth").addEventListener("click",() => {
-
+  $("#nextMonth").addEventListener("click",()=>{
     const [y,m] = activeMonth.split("-").map(Number);
     const d = new Date(y,m,1);
 
     setMonth(
       `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
     );
-
   });
 
+  $("#quickBackup").addEventListener("click",exportBackup);
 
-  $("#quickBackup").addEventListener(
-    "click",
-    exportBackup
-  );
-
-
-  $("#backupInfo").addEventListener("click",() => {
-
-    if (confirm(
+  $("#backupInfo").addEventListener("click",()=>{
+    if(confirm(
       "¿Quieres exportar un respaldo JSON? Al guardarlo, iOS te permitirá elegir una ubicación en Archivos."
-    )) {
-
+    )){
       exportBackup();
-
-    } else if (confirm(
+    }else if(confirm(
       "¿Quieres importar un respaldo existente?"
-    )) {
-
+    )){
       $("#importFile").click();
-
     }
-
   });
 
-
-  $("#importFile").addEventListener("change",e => {
-
-    if (e.target.files[0]) {
+  $("#importFile").addEventListener("change",e=>{
+    if(e.target.files[0]){
       importBackup(e.target.files[0]);
     }
 
     e.target.value = "";
-
   });
 
-
-  if (
+  if(
     "serviceWorker" in navigator &&
     location.protocol.startsWith("http")
-  ) {
-
+  ){
     navigator.serviceWorker
       .register("./sw.js")
-      .catch(() => {});
-
+      .catch(()=>{});
   }
-
 }
 
-
-start().catch(e => {
-
+start().catch(e=>{
   console.error(e);
 
   $("#view").innerHTML = `
@@ -1296,5 +1371,4 @@ start().catch(e => {
       </p>
     </section>
   `;
-
 });
